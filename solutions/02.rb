@@ -1,28 +1,28 @@
 class NumberSet
   include Enumerable
 
-  def initialize(array: [])
-    @numbers = array
+  def initialize(numbers: [])
+    @set = numbers
   end
 
   def <<(number)
-    @numbers << number unless @numbers.include? number
+    @set << number unless @set.include? number
   end
 
   def size
-    @numbers.size
+    @set.size
   end
 
   def empty?
-    @numbers.empty?
+    @set.empty?
   end
 
   def each(&block)
-    @numbers.each(&block)
+    @set.each(&block)
   end
 
   def [](filter)
-    NumberSet.new array: @numbers.select { |number| filter.approve? number }
+    NumberSet.new numbers: @set.select { |number| filter.approve? number }
   end
 end
 
@@ -48,11 +48,11 @@ class TypeFilter < Filter
   def initialize(number_type)
     case number_type
     when :integer
-      super() { |number| number.kind_of? Integer }
+      super() { |number| number.integer? }
     when :complex
-      super() { |number| number.kind_of? Complex }
+      super() { |number| not number.real? }
     else
-      super() { |number| number.kind_of? Rational or number.kind_of? Float }
+      super() { |number| number.real? and not number.integer? }
     end
   end
 end
@@ -63,7 +63,7 @@ class SignFilter < Filter
     when :positive     then super() { |number| number >  0 }
     when :non_positive then super() { |number| number <= 0 }
     when :negative     then super() { |number| number <  0 }
-    else super() { |number| number >= 0 }
+    when :non_negative then super() { |number| number >= 0 }
     end
   end
 end
