@@ -1,5 +1,46 @@
 module RBFS
 
+  class Parser
+
+    def initialize(data)
+      @not_parsed = data
+    end
+
+    def split_to_sections
+      counter, @not_parsed = @not_parsed.split(':', 2)
+      counter.to_i.times do
+        name, size, tail = @not_parsed.split(':', 3)
+        yield name, tail[0, size.to_i]
+        @not_parsed = tail[size.to_i.. -1]
+      end
+    end
+
+    def parse_file
+      type_data, data = @not_parsed.split(':', 2)
+      if    type_data == 'string' then File.new(data)
+      elsif type_data == 'symbol' then File.new(data.to_sym)
+      elsif type_data == 'nil'    then File.new
+      elsif data.include?('.')    then File.new(data.to_f)
+      elsif type_data == 'number' then File.new(data.to_i)
+      else                             File.new(data == 'true')
+      end
+    end
+
+    def parse_directory
+      directory = Directory.new
+            
+      split_to_sections do |name, data| 
+        directory.add_file(name, File.parse(data))
+      end
+
+      split_to_sections do |name, data|
+        directory.add_directory(name, Directory.parse(data))
+      end
+
+      directory
+    end
+  end
+
   class File
     attr_accessor :data
 
@@ -21,53 +62,29 @@ module RBFS
     end
 
     def self.parse(string_data)
-      type_data, data = string_data.split(':')
-      if    type_data == 'string' then File.new(data)
-      elsif type_data == 'symbol' then File.new(data.to_sym)
-      elsif type_data == 'nil'    then File.new
-      elsif data.include?('.')    then File.new(data.to_f)
-      elsif type_data == 'number' then File.new(data.to_i)
-      else                             File.new(data == 'true')
-      end
-    end
-
-    def self.parse_multiple_files(string_data)
-      files = {}
-      file_counter = string_data.partition(':').first.to_i
-      not_parsed = string_data.partition(':').last
-      file_counter.times do
-        file_name, file_size, tail = not_parsed.split(':', 3)
-        files[file_name] = File.parse tail[0, file_size.to_i]
-        not_parsed = tail[file_size.to_i, not_parsed.size]
-      end
-      [files, not_parsed]
+      Parser.new(string_data).parse_file
     end
   end
 
 
   class Directory
+    attr_reader :files, :directories
+    
     def initialize(files = {}, directories = {})
-      @folder = {files: files, directories: directories}
+      @files = files
+      @directories = directories
     end
 
     def add_file(name, file = File.new)
-      @folder[:files][name] = file
+      @files[name] = file
     end
 
     def add_directory(name, directory = Directory.new)
-      @folder[:directories][name] = directory
-    end
-
-    def files
-      @folder[:files]
-    end
-
-    def directories
-      @folder[:directories]
+      @directories[name] = directory
     end
 
     def [](name)
-      directories.fetch(name, files[name])
+      @directories.fetch(name, files[name])
     end
 
     def serialize
@@ -87,15 +104,7 @@ module RBFS
     end
 
     def self.parse(string_data)
-      folders, (files, not_parsed) ={}, File.parse_multiple_files(string_data)
-      folder_counter = not_parsed.partition(':').first.to_i
-      not_parsed = not_parsed.partition(':').last
-      folder_counter.times do
-        folder_name, folder_size, tail = not_parsed.split(':', 3)
-        folders[folder_name] = Directory.parse(tail[0, folder_size.to_i])
-        not_parsed = tail[folder_size.to_i, not_parsed.size]
-      end
-      Directory.new(files, folders)
+      Parser.new(string_data).parse_directory
     end
   end
 end
